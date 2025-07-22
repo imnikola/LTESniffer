@@ -1,0 +1,55 @@
+name: Cross-Compile LTESniffer for ARM64
+
+on:
+  push:
+    branches: [ "LTESniffer-record-subframe" ]
+  pull_request:
+    branches: [ "LTESniffer-record-subframe" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cross-compilation toolchain and deps
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            autoconf automake libtool pkg-config \
+            libfftw3-dev
+
+      - name: Set cross-compilation environment
+        run: |
+          echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CXX=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          echo "AR=aarch64-linux-gnu-ar" >> $GITHUB_ENV
+          echo "RANLIB=aarch64-linux-gnu-ranlib" >> $GITHUB_ENV
+          echo "STRIP=aarch64-linux-gnu-strip" >> $GITHUB_ENV
+          echo "LDFLAGS=-static" >> $GITHUB_ENV  # Try static linking
+
+      - name: Bootstrap configure script (if needed)
+        run: |
+          ./autogen.sh || true
+
+      - name: Configure for ARM64 (Raspberry Pi)
+        run: ./configure --host=aarch64-linux-gnu --disable-shared
+
+      - name: Build
+        run: make -j$(nproc)
+
+      - name: Strip binary to reduce size
+        run: |
+          if [ -f src/ltesniffer ]; then
+            $STRIP src/ltesniffer
+          fi
+
+      - name: Upload ARM64 binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ltesniffer-arm64
+          path: src/ltesniffer
